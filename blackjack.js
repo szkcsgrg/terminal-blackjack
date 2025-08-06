@@ -52,10 +52,17 @@ clearLogFile();
 const playerFilePath = path.join(__dirname, 'player.json');
 const playerData = JSON.parse(fs.readFileSync(playerFilePath, 'utf8'));
 
+// Initialize lastBet if it doesn't exist in player data
+if (!playerData.lastBet) {
+  playerData.lastBet = 50;
+  savePlayerData();
+}
+
 // Log game initialization
 logger.info('Blackjack game initialized', { 
   playerChips: playerData.chips, 
-  gamesPlayed: playerData.gamesPlayed 
+  gamesPlayed: playerData.gamesPlayed,
+  lastBet: playerData.lastBet
 });
 
 function delay(ms) {
@@ -68,7 +75,8 @@ function savePlayerData() {
     gamesPlayed: playerData.gamesPlayed,
     gamesWon: playerData.gamesWon,
     gamesLost: playerData.gamesLost,
-    gamesTied: playerData.gamesTied
+    gamesTied: playerData.gamesTied,
+    lastBet: playerData.lastBet
   });
   fs.writeFileSync(playerFilePath, JSON.stringify(playerData, null, 2));
 }
@@ -148,7 +156,7 @@ async function dealerTurn(deck, playerCards, dealerCards, bet) {
     chalk.magenta(`Dealer total: ${dealerTotal}`) + '\n' +
     chalk.green(`Your total: ${playerTotal}`) + '\n\n' +
     chalk.gray.bold(`${resultMessage}`) + '\n\n' +
-    chalk.gray.italic('Press (r) to restart, (q) to quit.')
+    chalk.gray.italic('Press (r) or Enter to restart, (q) to quit.')
   );
   screen.render();
 
@@ -157,7 +165,7 @@ async function dealerTurn(deck, playerCards, dealerCards, bet) {
 
   // Single clean restart handler
   const restartHandler = (ch, key) => {
-    if (key.name === 'r') {
+    if (key.name === 'r' || key.name === 'enter') {
       logger.game('Player chose to restart');
       screen.removeAllListeners('keypress');
       startBetting();
@@ -168,7 +176,7 @@ async function dealerTurn(deck, playerCards, dealerCards, bet) {
   };
 
   // Add keys for restart and quit
-  screen.key(['r', 'q'], restartHandler);
+  screen.key(['r', 'enter', 'q'], restartHandler);
 }
 
 
@@ -223,12 +231,12 @@ function startBetting() {
   screen.removeAllListeners('keypress');
   screen.removeAllListeners();
   
-  logger.game('Betting phase started', { currentChips: playerData.chips });
+  logger.game('Betting phase started', { currentChips: playerData.chips, lastBet: playerData.lastBet });
   
   box.setContent('');
   screen.render();
 
-  let bet = 50;
+  let bet = playerData.lastBet; // Use last bet as starting point
   let state = 'betting';
   let isProcessing = false; // Prevent double processing
 
@@ -285,6 +293,11 @@ function startBetting() {
       } else if (key.name === 'enter') {
         isProcessing = true;
         logger.game('Game starting', { bet, chips: playerData.chips });
+        
+        // Save the current bet as the last bet for next round
+        playerData.lastBet = bet;
+        savePlayerData();
+        
         screen.removeAllListeners('keypress');
         startGame(bet);
       }
@@ -393,13 +406,13 @@ function startGame(bet) {
         box.setContent(
           chalk.hex('#FFA500').bold(`Chips: ${playerData.chips}`) + '\n\n' +
           chalk.gray.bold('Bust! You lose.') + '\n\n' +
-          chalk.gray.italic('Press (r) to restart, (q) to quit.')
+          chalk.gray.italic('Press (r) or Enter to restart, (q) to quit.')
         );
         screen.render();
 
         // Clean restart handler
         const restartHandler = (ch, key) => {
-          if (key.name === 'r') {
+          if (key.name === 'r' || key.name === 'enter') {
             logger.game('Player chose to restart after bust');
             screen.removeAllListeners('keypress');
             startBetting();
@@ -408,7 +421,7 @@ function startGame(bet) {
             process.exit(0);
           }
         };
-        screen.key(['r', 'q'], restartHandler);
+        screen.key(['r', 'enter', 'q'], restartHandler);
       } else if (newTotal === 21) {
         // Auto-stand when player reaches 21
         gameActive = false;
@@ -509,7 +522,7 @@ async function handleNaturalBlackjacks(playerCards, dealerCards, bet, deck) {
     chalk.magenta(`Dealer total: ${dealerTotal}`) + '\n' +
     chalk.green(`Your total: ${playerTotal}`) + '\n\n' +
     chalk.gray.bold(`${resultMessage}`) + '\n\n' +
-    chalk.gray.italic('Press (r) to restart, (q) to quit.')
+    chalk.gray.italic('Press (r) or Enter to restart, (q) to quit.')
   );
   screen.render();
 
@@ -518,7 +531,7 @@ async function handleNaturalBlackjacks(playerCards, dealerCards, bet, deck) {
 
   // Single clean restart handler
   const restartHandler = (ch, key) => {
-    if (key.name === 'r') {
+    if (key.name === 'r' || key.name === 'enter') {
       logger.game('Player chose to restart after natural blackjack');
       screen.removeAllListeners('keypress');
       startBetting();
@@ -529,7 +542,7 @@ async function handleNaturalBlackjacks(playerCards, dealerCards, bet, deck) {
   };
 
   // Add keys for restart and quit
-  screen.key(['r', 'q'], restartHandler);
+  screen.key(['r', 'enter', 'q'], restartHandler);
 }
 
 
