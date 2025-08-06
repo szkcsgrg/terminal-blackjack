@@ -1,0 +1,43 @@
+{
+  "name": "terminal-blackjack",
+  "version": "1.0.0",
+  "description": "A fully-featured, interactive blackjack game built for the terminal with beautiful ASCII card art and comprehensive logging",
+  "main": "blackjack.js",
+  "type": "module",
+  "scripts": {
+    "start": "node blackjack.js",
+    "play": "node blackjack.js",
+    "log": "cat blackjack.log",
+    "reset": "echo '{\"chips\": 1000, \"gamesPlayed\": 0, \"gamesWon\": 0, \"gamesLost\": 0, \"gamesTied\": 0}' > player.json",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "blackjack",
+    "terminal",
+    "game",
+    "casino",
+    "cards",
+    "ascii",
+    "cli",
+    "interactive",
+    "nodejs"
+  ],
+  "author": "Gergő Szakács",
+  "license": "MIT",
+  "dependencies": {
+    "blessed": "^0.1.81",
+    "chalk": "^5.5.0",
+    "inquirer": "^12.9.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/szkcsgrg/terminal-blackjack.git"
+  },
+  "bugs": {
+    "url": "https://github.com/szkcsgrg/terminal-blackjack/issues"
+  },
+  "homepage": "https://github.com/szkcsgrg/terminal-blackjack#readme"
+}
