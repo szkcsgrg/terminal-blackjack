@@ -1,0 +1,4 @@
+[2025-08-08T09:00:34.685Z] DEBUG: Saving player data {"chips":5000,"gamesPlayed":0,"gamesWon":0,"gamesLost":0,"gamesTied":0,"lastBet":50}
+[2025-08-08T09:00:34.685Z] INFO: Blackjack game initialized {"playerChips":5000,"gamesPlayed":0,"lastBet":50}
+[2025-08-08T09:00:36.039Z] GAME: Betting phase started {"currentChips":5000,"lastBet":50}
+[2025-08-08T09:00:36.043Z] WARN: Player quit during betting 

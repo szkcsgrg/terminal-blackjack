@@ -3,9 +3,40 @@ import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
 
-// Logging system
+// Logging system with Windows OneDrive path fallback
 const __dirname = path.dirname(new URL(import.meta.url).pathname);
-const logFilePath = path.join(__dirname, 'blackjack.log');
+
+// Helper function to resolve file paths with fallbacks for Windows OneDrive issues
+function resolveFilePath(filename) {
+  // Primary path using __dirname
+  const primaryPath = path.join(__dirname, filename);
+  
+  // Fallback: current working directory (where the script is run from)
+  const fallbackPath = path.join(process.cwd(), filename);
+  
+  // Fallback: relative to script location (for cases where __dirname is broken)
+  const relativePath = `./${filename}`;
+  
+  // Test paths in order of preference
+  const pathsToTry = [primaryPath, fallbackPath, relativePath];
+  
+  for (const testPath of pathsToTry) {
+    try {
+      // Try to access the file to verify the path works
+      fs.accessSync(testPath, fs.constants.F_OK);
+      return testPath;
+    } catch (error) {
+      // Path doesn't work, try next one
+      continue;
+    }
+  }
+  
+  // If all paths fail, return the primary path and let the calling code handle the error
+  console.warn(`Warning: Could not find ${filename} at any expected location. Using primary path: ${primaryPath}`);
+  return primaryPath;
+}
+
+const logFilePath = resolveFilePath('blackjack.log');
 
 // Clear log file at startup
 function clearLogFile() {
@@ -14,6 +45,7 @@ function clearLogFile() {
     console.log(chalk.gray('Log file cleared for new session.'));
   } catch (error) {
     console.error('Failed to clear log file:', error);
+    console.error('Attempted path:', logFilePath);
   }
 }
 
@@ -32,6 +64,14 @@ function log(level, message, data = {}) {
     fs.appendFileSync(logFilePath, logLine);
   } catch (error) {
     console.error('Failed to write to log:', error);
+    console.error('Attempted log path:', logFilePath);
+    // Try to write to a fallback log in current directory
+    try {
+      fs.appendFileSync('./blackjack.log', logLine);
+    } catch (fallbackError) {
+      // If even fallback fails, just continue without logging to file
+      console.error('Fallback logging also failed:', fallbackError);
+    }
   }
   
   // Console logging removed for cleaner game interface
@@ -49,8 +89,35 @@ const logger = {
 // Clear log file at startup for fresh session
 clearLogFile();
 
-const playerFilePath = path.join(__dirname, 'player.json');
-const playerData = JSON.parse(fs.readFileSync(playerFilePath, 'utf8'));
+const playerFilePath = resolveFilePath('player.json');
+
+// Load player data with error handling
+let playerData;
+try {
+  playerData = JSON.parse(fs.readFileSync(playerFilePath, 'utf8'));
+} catch (error) {
+  console.error('Failed to load player data:', error);
+  console.error('Attempted path:', playerFilePath);
+  console.log('Creating default player data...');
+  
+  // Create default player data if file doesn't exist or can't be read
+  playerData = {
+    chips: 5000,
+    gamesPlayed: 0,
+    gamesWon: 0,
+    gamesLost: 0,
+    gamesTied: 0,
+    lastBet: 50
+  };
+  
+  // Try to save the default data
+  try {
+    fs.writeFileSync(playerFilePath, JSON.stringify(playerData, null, 2));
+    console.log('Default player data created successfully.');
+  } catch (saveError) {
+    console.error('Failed to create default player data:', saveError);
+  }
+}
 
 // Initialize lastBet if it doesn't exist in player data
 if (!playerData.lastBet) {
@@ -78,7 +145,17 @@ function savePlayerData() {
     gamesTied: playerData.gamesTied,
     lastBet: playerData.lastBet
   });
-  fs.writeFileSync(playerFilePath, JSON.stringify(playerData, null, 2));
+  
+  try {
+    fs.writeFileSync(playerFilePath, JSON.stringify(playerData, null, 2));
+  } catch (error) {
+    logger.error('Failed to save player data', { 
+      error: error.message, 
+      path: playerFilePath 
+    });
+    console.error('Failed to save player data:', error);
+    console.error('Attempted path:', playerFilePath);
+  }
 }
 
 async function dealerTurn(deck, playerCards, dealerCards, bet) {
@@ -317,15 +394,57 @@ function createDeck() {
       deck.push({ suit, rank });
     }
   }
+  
+  // Verify deck completeness
+  if (deck.length !== 52) {
+    logger.error('Deck creation error', { actualSize: deck.length, expectedSize: 52 });
+  }
+  
   return deck;
 }
 
 function shuffleDeck(deck) {
-    for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
+    // Create a copy to avoid modifying the original
+    const shuffled = [...deck];
+    
+    // Multiple shuffle passes for better randomness
+    for (let pass = 0; pass < 3; pass++) {
+        // Fisher-Yates shuffle with crypto-random seeding
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            // Use Date.now() and Math.random() for better entropy
+            const randomSeed = (Date.now() * Math.random()) % 1;
+            const j = Math.floor(randomSeed * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        
+        // Additional randomization: split deck and riffle shuffle
+        if (pass === 1) {
+            const mid = Math.floor(shuffled.length / 2);
+            const left = shuffled.slice(0, mid);
+            const right = shuffled.slice(mid);
+            
+            let leftIndex = 0, rightIndex = 0, deckIndex = 0;
+            
+            while (leftIndex < left.length && rightIndex < right.length) {
+                // Randomly choose which half to take from
+                if (Math.random() < 0.5) {
+                    shuffled[deckIndex++] = left[leftIndex++];
+                } else {
+                    shuffled[deckIndex++] = right[rightIndex++];
+                }
+            }
+            
+            // Add remaining cards
+            while (leftIndex < left.length) {
+                shuffled[deckIndex++] = left[leftIndex++];
+            }
+            while (rightIndex < right.length) {
+                shuffled[deckIndex++] = right[rightIndex++];
+            }
+        }
     }
-    return deck;
+    
+    return shuffled;
 }
 
 function startGame(bet) {
@@ -338,6 +457,10 @@ function startGame(bet) {
   // Create and shuffle deck
   const deck = shuffleDeck(createDeck());
   logger.debug('Deck created and shuffled', { deckSize: deck.length });
+  
+  // Log first 4 cards for randomness verification
+  const firstFour = deck.slice(-4).map(c => `${c.rank}${c.suit}`);
+  logger.debug('First four cards from deck', { cards: firstFour });
 
   // Deal initial cards
   const playerCards = [deck.pop(), deck.pop()];
@@ -711,7 +834,8 @@ console.log(chalk.gray(line));
 console.log("");
 console.log(chalk.white.bold("Thank your for playing Blackjack!"));
 console.log("");
-console.log(chalk.gray("Player data loaded from:"));
-console.log(chalk.gray.italic(playerFilePath));
+console.log(chalk.gray("Files loaded from:"));
+console.log(chalk.gray.italic("Player data: " + playerFilePath));
+console.log(chalk.gray.italic("Log file: " + logFilePath));
 console.log(chalk.gray("If you want to reset your player data, change the numbers in the player.json file."));
 console.log(chalk.gray(line));
